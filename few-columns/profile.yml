@@ -1,0 +1,49 @@
+# derived from
+# https://gist.githubusercontent.com/tjake/fb166a659e8fe4c8d4a3/raw/37a65834430fdd699dbef8a102ec0e412c6195cc/blogpost.yaml
+# (linked from http://www.datastax.com/dev/blog/improved-cassandra-2-1-stress-tool-benchmark-any-schema)
+
+keyspace: stresscql
+keyspace_definition: |
+  CREATE KEYSPACE stresscql WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 1};
+
+table: fewcolumns
+table_definition: |
+  CREATE TABLE fewcolumns (
+        domain text,
+        slug timeuuid,
+        body text,
+        PRIMARY KEY (domain, slug)
+  ) WITH CLUSTERING ORDER BY (published_date DESC)
+    AND compaction = { 'class':'SizeTieredCompactionStrategy' }; # chosen based on Benedict's comment
+                                                                 # "Cassandra partitions by hash by default; that
+                                                                 # means data is distributed randomly, and we are
+                                                                 # not great at ruling out sstables from queries,
+                                                                 # especially with STCS, so as soon as your dataset
+                                                                 # is meaningfully larger than memory it is likely
+                                                                 # most requests touch disk"
+                                                                 # For this benchmark we want to hit disk a lot, so
+                                                                 # we want STCS.
+
+columnspec:
+  - name: domain
+    size: gaussian(5..100) # domain names are relatively short
+    population: uniform(1..10M)
+
+  # 'slug timeuuid' default distribution is fine
+
+  - name: body
+    size: gaussian(100..5000) #the body of the blog post can be long
+    # leave (very large) default population
+
+insert:
+  partitions: fixed(1)            # Our partition key is the domain so only insert one per batch
+  select:     fixed(1)/1000       # We have 1000 posts per domain so 1/1000 will allow 1 post per batch
+  batchtype:  UNLOGGED            # Unlogged batches
+
+queries:
+   singlepost:
+      cql: select * from fewcolumns where domain = ? LIMIT 1
+      fields: samerow
+   timeline:
+      cql: select slug, body from fewcolumns where domain = ? LIMIT 10
+      fields: samerow

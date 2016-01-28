@@ -1,0 +1,50 @@
+# derived from
+# https://gist.githubusercontent.com/tjake/fb166a659e8fe4c8d4a3/raw/37a65834430fdd699dbef8a102ec0e412c6195cc/blogpost.yaml
+# (linked from http://www.datastax.com/dev/blog/improved-cassandra-2-1-stress-tool-benchmark-any-schema)
+
+keyspace: stresscql
+keyspace_definition: |
+  CREATE KEYSPACE stresscql WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 1};
+
+table: manycolumns
+table_definition: |
+  CREATE TABLE manycolumns (
+        # many columns with random English names - simulate
+        # column names in a typical cluster table with
+        # natural-language column names
+        astounds blob, avidity blob, bathtub blob,
+        bind blob, cajoles blob, carve blob,
+        concertmasters blob, creek blob, currycomb blob,
+        dissociates blob, expansiveness blob, gazer blob,
+        genuineness blob, giveaway blob, hypertension blob,
+        impediment blob, klingon blob, languor blob,
+        laypeople blob, letterman blob, leveled blob,
+        mavericks blob, medal blob, misinformation blob,
+        monolingual blob, mortarboard blob, nothing blob,
+        obeisance blob, overprinting blob, payrolls blob,
+        popsicle blob, rationals blob, resultants blob,
+        scandalmongers blob, strophes blob, subdued blob,
+        succeeded blob, surreal blob, swats blob,
+        terminating blob,
+        pk uuid,
+        PRIMARY KEY (pk)
+  ) WITH compaction = { 'class':'SizeTieredCompactionStrategy' }; # chosen based on Benedict's comment
+                                                                  # "Cassandra partitions by hash by default; that
+                                                                  # means data is distributed randomly, and we are
+                                                                  # not great at ruling out sstables from queries,
+                                                                  # especially with STCS, so as soon as your dataset
+                                                                  # is meaningfully larger than memory it is likely
+                                                                  # most requests touch disk"
+                                                                  # For this benchmark we want to hit disk a lot, so
+                                                                  # we want STCS.
+
+# leave default columnspec
+# use default insert settings and queries
+
+queries:
+ singlepk:
+    cql: select * from manycolumns where pk = ?
+    fields: samerow
+ timeline:
+    cql: select url, title, published_date from blogposts where domain = ? LIMIT 10
+    fields: samerow

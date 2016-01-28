@@ -1,0 +1,65 @@
+# derived from
+# https://gist.githubusercontent.com/tjake/fb166a659e8fe4c8d4a3/raw/37a65834430fdd699dbef8a102ec0e412c6195cc/blogpost.yaml
+# (linked from http://www.datastax.com/dev/blog/improved-cassandra-2-1-stress-tool-benchmark-any-schema)
+
+keyspace: stresscql
+keyspace_definition: |
+  CREATE KEYSPACE stresscql WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 1};
+table: blogposts
+table_definition: |
+  CREATE TABLE blogposts (
+        domain text,
+        published_date timeuuid,
+        url text,
+        author text,
+        title text,
+        body text,
+        PRIMARY KEY (domain, published_date)
+  ) WITH CLUSTERING ORDER BY (published_date DESC)
+    AND compaction = { 'class':'SizeTieredCompactionStrategy' };
+
+# STCS chosen based on Benedict's comment
+# "Cassandra partitions by hash by default; that
+# means data is distributed randomly, and we are
+# not great at ruling out sstables from queries,
+# especially with STCS, so as soon as your dataset
+# is meaningfully larger than memory it is likely
+# most requests touch disk"
+# For this benchmark we want to hit disk a lot, so
+# we want STCS.
+
+columnspec:
+  - name: domain
+    size: gaussian(5..100)       #domain names are relatively short
+    population: uniform(1..10M)  #10M possible domains to pick from
+
+  - name: published_date
+    cluster: fixed(1000)         #under each domain we will have max 1000 posts
+
+  - name: url
+    size: uniform(30..300)
+
+  - name: title                  #titles shouldn't go beyond 200 chars
+    size: gaussian(10..200)
+
+  - name: author
+    size: uniform(5..20)         #author names should be short
+
+  - name: body
+    size: gaussian(100..5000)    #the body of the blog post can be long
+
+insert:
+  partitions: fixed(1)            # Our partition key is the domain so only insert one per batch
+  select:    fixed(1)/1000        # We have 1000 posts per domain so 1/1000 will allow 1 post per batch
+  batchtype: UNLOGGED             # Unlogged batches
+
+queries:
+  basicselect:
+    cql: SELECT * FROM blogposts LIMIT 30
+  rangeselect:
+    cql: SELECT * FROM blogposts WHERE domain = ? AND published_date < ? LIMIT 30
+  sliceselect:
+    cql: SELECT text, url, author FROM blogposts WHERE domain = ? LIMIT 30
+
+  timeline:
+    cql: SELECT url, title, published_date FROM blogposts WHERE domain = ? LIMIT 10
