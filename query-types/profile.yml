@@ -59,7 +59,7 @@ queries:
   rangeselect:
     cql: SELECT * FROM blogposts WHERE domain = ? AND published_date < ? LIMIT 30
   sliceselect:
-    cql: SELECT text, url, author FROM blogposts WHERE domain = ? LIMIT 30
+    cql: SELECT body, url, author FROM blogposts WHERE domain = ? LIMIT 30
 
   timeline:
     cql: SELECT url, title, published_date FROM blogposts WHERE domain = ? LIMIT 10
